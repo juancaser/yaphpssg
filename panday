@@ -141,7 +141,7 @@ $build->is_exists('/_includes')
     });
 // Source
 $page_dir = '/_pages';
-if(isset($config['page_dir'])){
+if(is_array($config) && isset($config['page_dir'])){
     $build->is_exists('/'.$config['page_dir'])
     ->onSuccess(function($build){        
         $build->display('Source', realpath(__DIR__.'/'.$config['page_dir']));
@@ -179,6 +179,12 @@ $build->is_exists('/_site')
 $build->display('['.date('Y-m-d h:i:s').']', 'Scanning '.$page_dir);
 $dirs = array();
 $path = realpath(__DIR__.$page_dir);
+// Get all php files inside _page
+$items = glob($path.DIRECTORY_SEPARATOR.'*');
+foreach($items as $item){
+    $filename = pathinfo($item, PATHINFO_FILENAME);
+}
+
 $iterator = new RecursiveDirectoryIterator($path, RecursiveDirectoryIterator::KEY_AS_PATHNAME);
 foreach (new RecursiveIteratorIterator($iterator, RecursiveIteratorIterator::SELF_FIRST) as $file => $info) {
     $rp = realpath($file);
@@ -189,8 +195,8 @@ foreach (new RecursiveIteratorIterator($iterator, RecursiveIteratorIterator::SEL
     }else{
         $base_path = substr($rp,(strlen($path) + 1), 100);
         $base_path = dirname($base_path);
-    }
-        
+    }    
+    var_dump($rp);
     if(in_array($base_path, array('.','..'))) $base_path = DIRECTORY_SEPARATOR;
     if($base_path!='' && $base_path!=DIRECTORY_SEPARATOR){
         $bp = explode(DIRECTORY_SEPARATOR, $base_path);
@@ -214,7 +220,8 @@ foreach (new RecursiveIteratorIterator($iterator, RecursiveIteratorIterator::SEL
         );
     }
 }
-$build->display('['.date('Y-m-d h:i:s').']', 'Found '.count($dirs['dir']).' directories and '.count($dirs['file']).' files');
+$build->display('['.date('Y-m-d h:i:s').']', 'Found '.(isset($dirs['dir']) ? count($dirs['dir']) : '0').' directories and '.(isset($dirs['file']) ? count($dirs['file']) : '0').' files');
+
 
 // Always clear _site folder so we can generate a new one
 $build->display('['.date('Y-m-d h:i:s').']', 'Clearing previously generated files in /_sites');
