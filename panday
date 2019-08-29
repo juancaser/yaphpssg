@@ -1,0 +1,220 @@
+#!/usr/bin/env php
+<?php
+/**
+ * Yet Another PHP Static Site-Generator
+ * @version 1.0
+ * @author Juan Caser
+ * 
+ * Configuration file, this is not required but recommended
+ */
+
+define('ABSPATH',__DIR__);
+
+// SPL_Autoloader
+spl_autoload_register(function($class){
+
+});
+
+/**
+ * Helper
+ */
+function slugify($text){
+  $text = preg_replace('~[^\pL\d]+~u', '-', $text);
+  $text = iconv('utf-8', 'us-ascii//TRANSLIT', $text);
+  $text = preg_replace('~[^-\w]+~', '', $text);
+  $text = trim($text, '-');
+  $text = preg_replace('~-+~', '-', $text);
+  $text = strtolower($text);
+  if (empty($text)) return 'n-a';
+  return $text;
+}
+
+function clean_dir($target, $base) { 
+    if(file_exists($target)){
+        if(is_dir($target)){
+            $files = glob( $target . '/*', GLOB_MARK ); //GLOB_MARK adds a slash to directories returned
+            foreach( $files as $file ){
+                clean_dir( $file, $base);
+            }
+            if($base != $target) rmdir( $target );            
+        } elseif(is_file($target)) {
+            unlink( $target );  
+        }
+    }
+
+}
+
+/**
+ * Builder class
+ */
+
+class Panday{
+    private $display_mask = "%-100.98s\n";
+    private $is_error = false;
+    public $return_data = '';
+
+    public function load($path, $return = false){
+        if(file_exists(__DIR__.$path)){
+            if($return){
+                return require(__DIR__.$path);
+            }else{                
+                include(__DIR__.$path);
+            }
+            $this->is_error = false;
+        }else{
+            $this->is_error = true;
+        }
+        return $this;
+    }
+
+
+    public function is_exists($path){
+        if(file_exists(__DIR__.$path)){
+            $this->is_error = false;
+        }else{
+            $this->is_error = true;
+        }
+        return $this;
+    }
+
+    function onSuccess($callback){
+        if(!$this->is_error && is_callable($callback)){
+            call_user_func_array($callback, array($this));
+            $this->is_error = false;
+        }
+        return $this;
+    }
+    function onError($callback){        
+        if($this->is_error && is_callable($callback)){
+            call_user_func_array($callback, array($this));
+            $this->is_error = false;
+        }
+        return $this;
+    }
+
+    function display_format($mask){
+        $this->display_mask = $mask;
+        return $this;
+    }     
+
+    function display(){
+        $args = func_get_args();          
+        vprintf($this->display_mask, $args);
+        return $this;
+    }
+}
+
+/**
+ * Initialize generation of static site by panday tool
+ */
+$config = array();
+$build = new Panday;
+$build->display_format("%25.22s : %-75.70s\n");
+
+// Load config file
+$config = $build->load('/_config.php', true);
+$build->onSuccess(function($build){        
+    $build->display('Configuration file', realpath(ABSPATH.'/_config.php'));
+});
+$build->onError(function($build){
+    $build->display('Configuration file', 'Config file not found!');
+});
+
+// Source
+$page_dir = '/_pages';
+if(isset($config['page_dir'])){
+    $build->is_exists('/'.$config['page_dir'])
+    ->onSuccess(function($build){        
+        $build->display('Source', realpath(__DIR__.'/'.$config['page_dir']));
+        $page_dir = $config['page_dir'];
+    })
+    ->onError(function($build){
+        if(mkdir(__DIR__.'/'.$config['page_dir'])){
+            $page_dir = '/'.$config['page_dir'];
+            $build->display('Source', realpath(__DIR__.'/'.$config['page_dir']));
+        }
+    });    
+}else{
+    $build->is_exists('/_pages')
+    ->onSuccess(function($build){        
+        $build->display('Source', realpath(__DIR__.'/_pages'));
+    })
+    ->onError(function($build){
+        if(mkdir(__DIR__.'/_pages')){
+            mkdir(__DIR__.'/_pages');
+            $build->display('Source', realpath(__DIR__.'/_pages'));
+        }
+    });
+}
+
+// Check for _site dir
+$build->is_exists('/_site')
+    ->onSuccess(function($build){        
+        $build->display('Destination', realpath(__DIR__.'/_site'));
+    })
+    ->onError(function($build){
+        mkdir(__DIR__.'/_site');
+        $build->display('Destination', realpath(__DIR__.'/_site'));
+    });
+
+
+$build->display('['.date('Y-m-d h:i:s').']', 'Scanning '.$page_dir);
+$dirs = array();
+$path = realpath(__DIR__.$page_dir);
+$iterator = new RecursiveDirectoryIterator($path, RecursiveDirectoryIterator::KEY_AS_PATHNAME);
+foreach (new RecursiveIteratorIterator($iterator, RecursiveIteratorIterator::SELF_FIRST) as $file => $info) {
+    $rp = realpath($file);
+    $filename = slugify(pathinfo($rp, PATHINFO_FILENAME));
+    $ext = slugify(pathinfo($rp, PATHINFO_EXTENSION));
+    if(is_dir($file)){
+        $base_path = substr($rp,(strlen($path) + 1), 100);
+    }else{
+        $base_path = substr($rp,(strlen($path) + 1), 100);
+        $base_path = dirname($base_path);
+    }
+        
+    if(in_array($base_path, array('.','..'))) $base_path = DIRECTORY_SEPARATOR;
+    if($base_path!='' && $base_path!=DIRECTORY_SEPARATOR){
+        $bp = explode(DIRECTORY_SEPARATOR, $base_path);
+        $frags = array();
+        foreach($bp as $b){
+            $frags[] = slugify($b);
+        }
+        $base_path = DIRECTORY_SEPARATOR.implode(DIRECTORY_SEPARATOR, $frags).DIRECTORY_SEPARATOR;
+    }
+
+    $hash = md5($rp);
+    if(is_dir($file)){
+        $dirs['dir'][$hash] = array(
+            'source'        => $rp,
+            'destination'   => __DIR__.DIRECTORY_SEPARATOR.'_site'.$base_path
+        );
+    }elseif(is_file($file) && $ext == 'php'){                
+        $dirs['file'][$hash] = array(
+            'source'  => $rp,
+            'destination'=> __DIR__.DIRECTORY_SEPARATOR.'_site'.$base_path.$filename.'.html',
+        );
+    }
+}
+$build->display('['.date('Y-m-d h:i:s').']', 'Found '.count($dirs['dir']).' directories and '.count($dirs['file']).' files');
+
+// Always clear _site folder so we can generate a new one
+$build->display('['.date('Y-m-d h:i:s').']', 'Clearing previously generated files in /_sites');
+clean_dir(__DIR__.'/_site', __DIR__.'/_site');
+
+
+$build->display('['.date('Y-m-d h:i:s').']', 'Recreating directory in /_sites');
+// Now everything is in place let start generating it
+// Let start with the directory
+foreach($dirs['dir'] as $dir){    
+    mkdir($dir['destination'], 0777, true);
+    // See that wasn't so hard!
+}
+
+$build->display('['.date('Y-m-d h:i:s').']', 'Recreating html in /_sites');
+foreach($dirs['file'] as $dir){
+    ob_start();
+    include($dir['source']);
+    $html = ob_get_clean();
+    file_put_contents($dir['destination'], $html);
+}
