@@ -67,6 +67,16 @@ class Panday{
         return $this;
     }
 
+    public function include($path){
+        if(file_exists(__DIR__.'/_includes/'.$path)){
+            include(__DIR__.'/_includes/'.$path);
+            $this->is_error = false;
+        }else{
+            $this->is_error = true;
+        }
+        return $this;
+    }
+
 
     public function is_exists($path){
         if(file_exists(__DIR__.$path)){
@@ -119,7 +129,16 @@ $build->onSuccess(function($build){
 $build->onError(function($build){
     $build->display('Configuration file', 'Config file not found!');
 });
-
+// Includes
+$build->is_exists('/_includes')
+    ->onSuccess(function($build){        
+        $build->display('Include path', realpath(__DIR__.'/_includes'));
+    })
+    ->onError(function($build){
+        if(mkdir(__DIR__.'/_includes')){
+            $build->display('Include path', realpath(__DIR__.'/_includes'));
+        }
+    });
 // Source
 $page_dir = '/_pages';
 if(isset($config['page_dir'])){
@@ -141,7 +160,6 @@ if(isset($config['page_dir'])){
     })
     ->onError(function($build){
         if(mkdir(__DIR__.'/_pages')){
-            mkdir(__DIR__.'/_pages');
             $build->display('Source', realpath(__DIR__.'/_pages'));
         }
     });
