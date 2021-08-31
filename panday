@@ -12,7 +12,17 @@ define('ABSPATH',__DIR__);
 
 // SPL_Autoloader
 spl_autoload_register(function($class){
-
+    $path = [
+        __DIR__.DIRECTORY_SEPARATOR.'vendor'.DIRECTORY_SEPARATOR.trim(strtolower($class),'\\').'.php',
+        __DIR__.DIRECTORY_SEPARATOR.'class'.DIRECTORY_SEPARATOR.trim(strtolower($class),'\\').'.php',
+        __DIR__.DIRECTORY_SEPARATOR.trim(strtolower($class),'\\').'.php'
+    ];
+    
+    foreach($path as $file){
+        if(file_exists($file)){
+            include_once($file);
+        }
+    }
 });
 
 /**
